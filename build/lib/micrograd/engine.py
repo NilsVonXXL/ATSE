@@ -2,24 +2,14 @@
 class Value:
     """ stores a single scalar value and its gradient """
 
-    def __init__(self, data, _children=(), _op='', lower = None, upper = None):
+    def __init__(self, data, _children=(), _op=''):
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
         self._backward = lambda: None
         self._prev = set(_children)
         self._op = _op # the op that produced this node, for graphviz / debugging / etc
-        
-        # Add bounds
-        if lower is None:
-            self.lower = self.data
-            self.upper = self.data
-        else:
-            self.lower = lower
-            self.upper = upper
-        self._ibp = lambda: None  # like backward
 
-        
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other), '+')
@@ -28,11 +18,6 @@ class Value:
             self.grad += out.grad
             other.grad += out.grad
         out._backward = _backward
-
-        def _ibp():
-            out.lower = self.lower + other.lower
-            out.upper = self.upper + other.upper
-        out._ibp = _ibp
 
         return out
 
@@ -45,13 +30,6 @@ class Value:
             other.grad += self.data * out.grad
         out._backward = _backward
 
-        def _ibp():
-            l = [self.lower * other.lower, self.lower * other.upper,
-                self.upper * other.lower, self.upper * other.upper]
-            out.lower = min(l)
-            out.upper = max(l)
-        out._ibp = _ibp
-        
         return out
 
     def __pow__(self, other):
@@ -62,9 +40,6 @@ class Value:
             self.grad += (other * self.data**(other-1)) * out.grad
         out._backward = _backward
 
-        #def _ibp():
-        #   out.lower = (self.lower **)
-        
         return out
 
     def relu(self):
@@ -74,11 +49,6 @@ class Value:
             self.grad += (out.data > 0) * out.grad
         out._backward = _backward
 
-        def _ibp():
-            out.lower = max(0, self.lower)
-            out.upper = max(0, self.upper)
-        out._ibp = _ibp
-        
         return out
 
     def backward(self):
@@ -98,21 +68,6 @@ class Value:
         self.grad = 1
         for v in reversed(topo):
             v._backward()
-
-    # just like backward but not reversed
-    def ibp(self):
-        topo = []
-        visited = set()
-        def build_topo(v):
-            if v not in visited:
-                visited.add(v)
-                for child in v._prev:
-                    build_topo(child)
-                topo.append(v)
-        build_topo(self)
-
-        for v in topo:
-            v._ibp()
 
     def __neg__(self): # -self
         return self * -1
