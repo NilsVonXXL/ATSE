@@ -1,14 +1,22 @@
 
 class Value:
     """ stores a single scalar value and its gradient """
+    _global_id = 0  # class variable for unique IDs
+    
+    def _noop(self):
+        pass
 
     def __init__(self, data, _children=(), _op='', lower = None, upper = None):
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
-        self._backward = lambda: None
+        self._backward = self._noop
         self._prev = set(_children)
         self._op = _op # the op that produced this node, for graphviz / debugging / etc
+        
+         # Assign a unique id
+        self.id = Value._global_id
+        Value._global_id += 1
         
         # Add bounds
         if lower is None:
@@ -17,7 +25,7 @@ class Value:
         else:
             self.lower = lower
             self.upper = upper
-        self._ibp = lambda: None  # like backward
+        self._ibp = self._noop  # like backward
 
         
     def __add__(self, other):
