@@ -6,26 +6,13 @@ class Value:
     def _noop(self):
         pass
 
-    def __init__(self, data, _children=(), _op='', lower = None, upper = None):
+    def __init__(self, data, _children=(), _op=''):
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
-        self._backward = self._noop
-        self._prev = set(_children)
-        self._op = _op # the op that produced this node, for graphviz / debugging / etc
-        
-         # Assign a unique id
-        self.id = Value._global_id
-        Value._global_id += 1
-        
-        # Add bounds
-        if lower is None:
-            self.lower = self.data
-            self.upper = self.data
-        else:
-            self.lower = lower
-            self.upper = upper
-        self._ibp = self._noop  # like backward
+        self._backward = lambda: None
+        self.prev = set(_children)
+        self.op = _op # the op that produced this node, for graphviz / debugging / etc
 
         
     def __add__(self, other):
@@ -37,11 +24,6 @@ class Value:
             other.grad += out.grad
         out._backward = _backward
 
-        def _ibp():
-            out.lower = self.lower + other.lower
-            out.upper = self.upper + other.upper
-        out._ibp = _ibp
-
         return out
 
     def __mul__(self, other):
@@ -52,13 +34,6 @@ class Value:
             self.grad += other.data * out.grad
             other.grad += self.data * out.grad
         out._backward = _backward
-
-        def _ibp():
-            l = [self.lower * other.lower, self.lower * other.upper,
-                self.upper * other.lower, self.upper * other.upper]
-            out.lower = min(l)
-            out.upper = max(l)
-        out._ibp = _ibp
         
         return out
 
@@ -81,46 +56,27 @@ class Value:
         def _backward():
             self.grad += (out.data > 0) * out.grad
         out._backward = _backward
-
-        def _ibp():
-            out.lower = max(0, self.lower)
-            out.upper = max(0, self.upper)
-        out._ibp = _ibp
         
         return out
-
-    def backward(self):
-
+    
+    def compute_graph(self):
         # topological order all of the children in the graph
         topo = []
         visited = set()
         def build_topo(v):
             if v not in visited:
                 visited.add(v)
-                for child in v._prev:
+                for child in v.prev:
                     build_topo(child)
                 topo.append(v)
         build_topo(self)
+        return topo
 
+    def backward(self):
         # go one variable at a time and apply the chain rule to get its gradient
         self.grad = 1
-        for v in reversed(topo):
+        for v in reversed(self.compute_graph()):
             v._backward()
-
-    # just like backward but not reversed
-    def ibp(self):
-        topo = []
-        visited = set()
-        def build_topo(v):
-            if v not in visited:
-                visited.add(v)
-                for child in v._prev:
-                    build_topo(child)
-                topo.append(v)
-        build_topo(self)
-
-        for v in topo:
-            v._ibp()
 
     def __neg__(self): # -self
         return self * -1
@@ -144,4 +100,7 @@ class Value:
         return other * self**-1
 
     def __repr__(self):
-        return f"Value(data={self.data}, grad={self.grad})"
+        if len(self.op) > 0:
+            return f"Value(data={self.data}, grad={self.grad}, op={self.op})"
+        else:
+            return f"Value(data={self.data}, grad={self.grad})"
