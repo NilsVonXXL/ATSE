@@ -10,7 +10,7 @@ class Value:
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
-        self._backward = lambda: None
+        self._backward = self._noop
         self.prev = set(_children)
         self.op = _op # the op that produced this node, for graphviz / debugging / etc
         
