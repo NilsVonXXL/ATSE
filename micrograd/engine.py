@@ -13,6 +13,9 @@ class Value:
         self._backward = lambda: None
         self.prev = set(_children)
         self.op = _op # the op that produced this node, for graphviz / debugging / etc
+        
+        self.id = Value._global_id
+        Value._global_id += 1
 
         
     def __add__(self, other):
