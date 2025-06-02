@@ -27,31 +27,14 @@ ibp_rules = {
 }
 
 
-def _ibp_mul_rule(a: Interval | Value, b: Interval | Value) -> Interval:
-    if isinstance(a, Value) and isinstance(b, Value):
-        lb = ub = a.data * b.data
-
-    if isinstance(b, Interval):
-        a, b = b, a
-
-    if isinstance(a, Interval) and isinstance(b, Value):
-        b = b.data
-        if b >= 0:
-            lb = a.lower * b
-            ub = a.upper * b
-        else:
-            lb = a.upper * b
-            ub = a.lower * b
-    else:
-        options = [
-            a.lower * b.lower,
-            a.lower * b.upper,
-            a.upper * b.lower,
-            a.upper * b.upper,
-        ]
-        lb = min(options)
-        ub = max(options)
-    return Interval(lb, ub)
+def _ibp_mul_rule(a: Interval, b: Interval) -> Interval:
+    products = [
+        a.lower * b.lower,
+        a.lower * b.upper,
+        a.upper * b.lower,
+        a.upper * b.upper,
+    ]
+    return Interval(min(products), max(products))
 
 
 ibp_rules["*"] = _ibp_mul_rule
