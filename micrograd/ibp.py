@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from copy import deepcopy
+from copy import copy
 from micrograd.engine import Value
 
 
@@ -9,16 +9,18 @@ class Interval:
     upper: float
 
 
-def ibp(output: Value, in_bounds: dict[Value, Interval]) -> Interval:
-    env = deepcopy(in_bounds)
+def ibp(output: Value, in_bounds: dict[Value, Interval], return_all: bool = False) -> Interval:
+    env = copy(in_bounds)
 
     for v in output.compute_graph():
+        if v in env:
+            continue
+            
         if len(v.prev) == 0:
-            if v not in env:
-                env[v] = Interval(v.data, v.data)
+            env[v] = Interval(v.data, v.data)
         else:
             env[v] = ibp_rules[v.op](*[env[p] for p in v.prev])
-    return env[output]
+    return env[output] if not return_all else env
 
 
 ibp_rules = {

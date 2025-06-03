@@ -107,3 +107,11 @@ class Value:
             return f"Value(data={self.data}, grad={self.grad}, op={self.op})"
         else:
             return f"Value(data={self.data}, grad={self.grad})"
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Value):
+            return False
+        return self.id == other.id
+    
+    def __hash__(self) -> int:
+        return hash(self.id)
