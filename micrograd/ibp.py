@@ -13,7 +13,9 @@ def ibp(output: Value, in_bounds: dict[Value, Interval], return_all: bool = Fals
     env = copy(in_bounds)
 
     for v in output.compute_graph():
+        input = False
         if v in env:
+            input = True
             continue
             
         if len(v.prev) == 0:
