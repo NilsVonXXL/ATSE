@@ -8,6 +8,11 @@ class Interval:
     lower: float
     upper: float
 
+    def __iter__(self):
+        yield self.lower
+        yield self.upper
+    
+
 
 def ibp(output: Value, in_bounds: dict[Value, Interval], return_all: bool = False) -> Interval:
     env = copy(in_bounds)
@@ -40,5 +45,5 @@ def _ibp_mul_rule(a: Interval, b: Interval) -> Interval:
     ]
     return Interval(min(products), max(products))
 
-
 ibp_rules["*"] = _ibp_mul_rule
+
