@@ -1,8 +1,7 @@
 
 class Value:
     """ stores a single scalar value and its gradient """
-    _global_id = 0  # class variable for unique IDs
-    
+
     def _noop(self):
         pass
 
@@ -11,11 +10,9 @@ class Value:
         self.grad = 0
         # internal variables used for autograd graph construction
         self._backward = self._noop
-        self.prev = set(_children)
+        self.prev = _children
         self.op = _op # the op that produced this node, for graphviz / debugging / etc
-        
-        self.id = Value._global_id
-        Value._global_id += 1
+    
 
         
     def __add__(self, other):
@@ -108,10 +105,3 @@ class Value:
         else:
             return f"Value(data={self.data}, grad={self.grad})"
     
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Value):
-            return False
-        return self.id == other.id
-    
-    def __hash__(self) -> int:
-        return hash(self.id)

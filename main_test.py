@@ -9,7 +9,7 @@ def test_branch_and_bound():
     model_path = os.path.join(script_dir, "model.pkl")
     with open(model_path, 'rb') as f:
         loaded_model = pickle.load(f)
-    x = [Value(1), Value(-1)]
+    x = [Value(0), Value(0.5)]
     in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
     out = loaded_model(x)
     lower_bound, upper_bound = branch_and_bound(out, in_bounds)
