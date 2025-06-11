@@ -2,22 +2,6 @@ from micrograd.engine import Value
 import cvxpy as cp
 
 
-# Helper functions for micrograd branch and bound attempt
-
-
-
-# Collect all ReLU nodes in the computation graph of the last score
-def collect_relu_nodes(output_node, node_bounds, splitted_nodes=()):
-    relu_nodes = []
-    for v in output_node.compute_graph():
-        if v.op == 'ReLU' and v not in splitted_nodes:
-            # Only add if lower and upper bounds have a sign change
-            v_inp = list(v.prev)[0]
-            lower, upper = node_bounds[v_inp]
-            if lower * upper < 0:
-                relu_nodes.append(v)
-    return relu_nodes
-
 
 def planet_relaxation(output: Value, in_bounds, node_bounds):
     env = {}  # maps Value nodes to cp.Variable or float

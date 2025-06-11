@@ -1,17 +1,32 @@
-import random
 from micrograd.ibp import ibp, Interval
-from micrograd.engine import Value
-from micrograd.helpers import collect_relu_nodes, planet_relaxation
+from micrograd.planet import planet_relaxation
 import copy
 
 
-def branch_and_bound(score, in_bounds, splits={}, node_bounds=None):
-    
+def simple_deterministic(relu_nodes):
+    return relu_nodes[0]
+
+
+def collect_relu_nodes(output_node, node_bounds, splitted_nodes=()):
+    """Collect mixed-phase ReLU nodes in a computation graph."""
+    relu_nodes = []
+    for v in output_node.compute_graph():
+        if v.op == 'ReLU':
+            v_inp = v.prev[0]
+            if v_inp in splitted_nodes:
+                # ReLU is already split, skip
+                continue
+            # Only add if lower and upper bounds have a sign change
+            lower, upper = node_bounds[v_inp]
+            if lower * upper < 0:
+                relu_nodes.append(v)
+    return relu_nodes
+
+
+def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic, splits={}, node_bounds=None):
     # ibp
     if node_bounds is None:
         node_bounds = ibp(score, in_bounds, return_all=True)
-    
-    
     
     # Collect ReLU nodes
     relu_nodes = collect_relu_nodes(score, node_bounds, splits.keys())
@@ -21,10 +36,9 @@ def branch_and_bound(score, in_bounds, splits={}, node_bounds=None):
         print("No ReLU nodes with sign change found, returning bounds")
         return planet_relaxation(score, in_bounds, node_bounds)
     
-    #chosen_relu = random.choice(relu_nodes)
-    chosen_relu = relu_nodes[0]  # For deterministic behavior, use the first one
-    relu_input = list(chosen_relu.prev)[0]
-    print("Ammout of Relus", len(relu_nodes))
+    chosen_relu = choose_relu(relu_nodes)
+    relu_input = chosen_relu.prev[0]
+    print("Number of Unstable Relus:", len(relu_nodes))
     
     # Branch 1: ReLU input >= 0
     
@@ -45,7 +59,7 @@ def branch_and_bound(score, in_bounds, splits={}, node_bounds=None):
     else:
         print("Continuing branch and bound for branch 1", check1_l, check1_u)
         # counter implematation for branching how deep
-        bounds1 = branch_and_bound(score, in_bounds, split1, node_bounds)
+        bounds1 = branch_and_bound(score, in_bounds, choose_relu, split1, node_bounds)
 
     # Branch 2: ReLU input <= 0
     
@@ -64,7 +78,7 @@ def branch_and_bound(score, in_bounds, splits={}, node_bounds=None):
         return check2_l, check2_u
     else:
         print("Continuing branch and bound for branch 2", check2_l, check2_u)
-        bounds2 = branch_and_bound(score, in_bounds, split2, node_bounds)
+        bounds2 = branch_and_bound(score, in_bounds, choose_relu, split2, node_bounds)
     
 
     # Return global bounds
