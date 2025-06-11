@@ -2,30 +2,35 @@ import pickle
 from micrograd.engine import Value
 from micrograd.ibp import Interval, ibp
 from micrograd.branch_and_bound import branch_and_bound  # Import your main function
-import os
+from pathlib import Path
 
-def test_branch_and_bound():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "model.pkl")
+import pytest
+
+
+@pytest.fixture
+def moons_model():
+    resource_dir = Path(__file__).parent.parent / "resources"
+    model_path = resource_dir / "moons.pkl"
     with open(model_path, 'rb') as f:
         loaded_model = pickle.load(f)
+    return loaded_model
+
+
+def test_branch_and_bound(moons_model):
     x = [Value(0), Value(0.5)]
     in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
-    out = loaded_model(x)
+    out = moons_model(x)
     lower_bound, upper_bound = branch_and_bound(out, in_bounds)
-    return lower_bound, upper_bound
+    print(lower_bound, upper_bound)
 
-def test_model():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(script_dir, "model.pkl")
-    with open(model_path, 'rb') as f:
-        loaded_model = pickle.load(f)
+
+def test_ibp(moons_model):
     x = [Value(1), Value(-1)]
     in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
-    out = loaded_model(x)
+    out = moons_model(x)
     score = ibp(out, in_bounds)
-    return score
+    print(score)
 
 
-print(test_branch_and_bound())
-#print(test_model())
+if __name__ == "__main__":
+    pytest.run()
