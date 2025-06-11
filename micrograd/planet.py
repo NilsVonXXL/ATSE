@@ -70,8 +70,9 @@ def planet_relaxation(output: Value, in_bounds, node_bounds):
 
     prob_lower = cp.Problem(cp.Minimize(env[output]), constraints)
     result_lower = prob_lower.solve()
+    minimizer_lower = {in_node: env[in_node].value for in_node in in_bounds}
     
     prob_upper = cp.Problem(cp.Maximize(env[output]), constraints)
     result_upper = prob_upper.solve()
     
-    return result_lower , result_upper
+    return result_lower, result_upper, minimizer_lower

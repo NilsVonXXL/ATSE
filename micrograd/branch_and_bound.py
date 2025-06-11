@@ -1,6 +1,9 @@
+from dataclasses import dataclass
+import itertools
+
+from micrograd.engine import Value
 from micrograd.ibp import ibp, Interval
 from micrograd.planet import planet_relaxation
-import copy
 
 
 def simple_deterministic(relu_nodes):
@@ -23,66 +26,55 @@ def collect_relu_nodes(output_node, node_bounds, splitted_nodes=()):
     return relu_nodes
 
 
-def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic, splits={}, node_bounds=None):
-    # ibp
-    if node_bounds is None:
-        node_bounds = ibp(score, in_bounds, return_all=True)
-    
-    # Collect ReLU nodes
-    relu_nodes = collect_relu_nodes(score, node_bounds, splits.keys())
-    
-    # No ReLU nodes with sign change in bounds found
-    if not relu_nodes:
-        print("No ReLU nodes with sign change found, returning bounds")
-        return planet_relaxation(score, in_bounds, node_bounds)
-    
-    chosen_relu = choose_relu(relu_nodes)
-    relu_input = chosen_relu.prev[0]
-    print("Number of Unstable Relus:", len(relu_nodes))
-    
-    # Branch 1: ReLU input >= 0
-    
-    split1 = copy.copy(splits)
-    split1[relu_input] = Interval(0, node_bounds[relu_input].upper)
-    
-    # Check if the bounds are valid for the first branch via Planet relaxation
-    check1_l, check1_u = planet_relaxation(score, in_bounds ,node_bounds | split1)
-    if check1_l == float('inf') or check1_u == float('-inf'):
-        print("Branch 1 is infeasible, bounds:", check1_l, check1_u)
-        bounds1 =  float('inf'), float('-inf')
-    elif check1_l >= 0:
-        print("Branch 1 is satfisfied, bounds:", check1_l, check1_u)
-        bounds1= check1_l, check1_u
-    elif check1_u < 0:
-        print("Counterexample found in branch 1")
-        return check1_l, check1_u
-    else:
-        print("Continuing branch and bound for branch 1", check1_l, check1_u)
-        # counter implematation for branching how deep
-        bounds1 = branch_and_bound(score, in_bounds, choose_relu, split1, node_bounds)
+@dataclass
+class Branch:
+    # the bounds for the *inputs* of the ReLUs that have been split
+    splits: dict[Value, Interval]
+    id: int
+    depth: int = 0
 
-    # Branch 2: ReLU input <= 0
-    
-    split2 = copy.copy(splits)
-    split2[relu_input] = Interval(node_bounds[relu_input].lower, 0)
-    
-    check2_l, check2_u = planet_relaxation(score, in_bounds, node_bounds | split2)
-    if check2_l == float('inf') or check2_u == float('-inf'):
-        print("Branch 2 is infeasible, bounds:", check2_l, check2_u)
-        bounds2 = float('inf'), float('-inf')
-    elif check2_l >= 0:
-        print("Branch 2 is satfisfied, bounds:", check2_l, check2_u)
-        bounds2= check2_l, check2_u
-    elif check2_u < 0:
-        print("Counterexample found in branch 2")
-        return check2_l, check2_u
-    else:
-        print("Continuing branch and bound for branch 2", check2_l, check2_u)
-        bounds2 = branch_and_bound(score, in_bounds, choose_relu, split2, node_bounds)
-    
 
-    # Return global bounds
-    #print (f"bounds1: {bounds1}, bounds2: {bounds2}")  # debugging
-    print("End boudns", bounds1, bounds2)
-    return min(bounds1[0], bounds2[0]), max(bounds1[1], bounds2[1])
+def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
+    node_bounds = ibp(score, in_bounds, return_all=True)
+
+    ids = itertools.count(0)
+    branches = [Branch(splits={}, id=next(ids))]
+    best_lb, best_ub = node_bounds[score]
+    while len(branches) > 0:
+        branch = branches.pop(0)
+
+        branch_lb, branch_ub, minimizer = planet_relaxation(score, in_bounds, node_bounds | branch.splits)
+
+        best_lb = min(best_lb, branch_lb)
+        best_ub = min(best_ub, branch_ub)  # we search for bounds on the minimum of the score!
+
+        if branch_lb == float('inf') or branch_ub == float('-inf'):
+            print(f"Pruning infeasible branch {branch.id}.")
+            continue
+        elif branch_lb >= 0:
+            print(f"Pruning satisfied branch {branch.id} with bounds: {branch_lb}, {branch_ub}")
+            continue
+        elif branch_ub < 0:
+            print(f"Counterexample found in branch {branch.id} with bounds: {branch_lb}, {branch_ub}")
+            return branch_lb, branch_ub, minimizer
+        
+        print(f"Splitting branch {branch.id} with bounds {branch_lb}, {branch_ub}")
+        relu_nodes = collect_relu_nodes(score, node_bounds, branch.splits.keys())
+        if not relu_nodes:
+            print("All ReLU nodes split.")
+            # in this case, the planet LP relaxation is precise and the minimizer
+            # for the lower bound is a counterexample
+            return best_lb, best_ub, minimizer
+        
+        chosen_relu = choose_relu(relu_nodes)
+        relu_input = chosen_relu.prev[0]
+        relu_input_lb, relu_input_ub = node_bounds[relu_input]
+
+        split1 = branch.splits | {relu_input: Interval(relu_input_lb, 0.0)}
+        split2 = branch.splits | {relu_input: Interval(0.0, relu_input_ub)}
+        branches.append(Branch(splits=split1, id=next(ids), depth=branch.depth + 1))
+        branches.append(Branch(splits=split2, id=next(ids), depth=branch.depth + 1))
+
+    print("All branches pruned.")
+    return best_lb, best_ub, None 
    
