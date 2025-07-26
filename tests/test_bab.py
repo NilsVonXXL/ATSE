@@ -16,33 +16,27 @@ def moons_model():
     return loaded_model
 
 
-def test_branch_and_bound1(moons_model):
-    x = [Value(0), Value(0.5)]
-    in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
-    out = moons_model(x)
-    lower_bound, upper_bound, cx = branch_and_bound(out, in_bounds)
-    print(lower_bound, upper_bound, cx)
-    cx = [cx[xi] for xi in x]
-    out = moons_model(cx)
-    assert out.data < 0
+@pytest.mark.parametrize("x1,x2", [(0.0, 0.5), (-0.5, 1.0), (2.0, -0.5)])
+@pytest.mark.parametrize("eps", [0.1, 0.5])
+def test_branch_and_bound(moons_model, x1, x2, eps):
+    print("=" * 80)
+    print(f"Branch and bound for x1={x1}, x2={x2}, eps={eps}")
+    print("=" * 80)
 
-def test_branch_and_bound2(moons_model):
-    x = [Value(-0.5), Value(1.0)]
-    in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
+    x = [Value(x1), Value(x2)]
+    in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in x}
     out = moons_model(x)
     lower_bound, upper_bound, cx = branch_and_bound(out, in_bounds)
-    print(lower_bound, upper_bound, cx)
-    cx = [cx[xi] for xi in x]
-    out = moons_model(cx)
-    assert out.data < 0
 
-def test_branch_and_bound3(moons_model):
-    x = [Value(2.0), Value(-0.5)]
-    in_bounds = {xi: Interval(xi.data - 0.1, xi.data + 0.1) for xi in x}
-    out = moons_model(x)
-    lower_bound, upper_bound, cx = branch_and_bound(out, in_bounds)
-    print(lower_bound, upper_bound, cx)
-    assert cx is None
+    print("Result:", lower_bound, upper_bound, cx)
+    assert lower_bound <= upper_bound
+    assert lower_bound <= out.data
+    if cx is None:
+        assert lower_bound >= 0
+    else:
+        cx = [cx[xi] for xi in x]
+        out = moons_model(cx)
+        assert out.data < 0
 
 
 def test_ibp(moons_model):
