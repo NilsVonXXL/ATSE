@@ -4,6 +4,7 @@ import itertools
 from micrograd.engine import Value
 from micrograd.ibp import ibp, Interval
 from micrograd.planet import planet_relaxation
+from micrograd.computegraph import rerun
 
 
 def simple_deterministic(relu_nodes):
@@ -38,33 +39,35 @@ def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
     node_bounds = ibp(score, in_bounds, return_all=True)
 
     ids = itertools.count(0)
+    _, best_ub = node_bounds[score]
+    pruned_lbs = []  # used to compute the best lower bound
     branches = [Branch(splits={}, id=next(ids))]
-    best_lb, best_ub = node_bounds[score]
     while len(branches) > 0:
         branch = branches.pop(0)
 
-        branch_lb, branch_ub, minimizer = planet_relaxation(score, in_bounds, node_bounds | branch.splits)
+        branch_lb, minimizer = planet_relaxation(score, in_bounds, node_bounds | branch.splits)
 
-        best_lb = min(best_lb, branch_lb)
-        best_ub = min(best_ub, branch_ub)  # we search for bounds on the minimum of the score!
-
-        if branch_lb == float('inf') or branch_ub == float('-inf'):
+        if branch_lb == float('inf'):
             print(f"Pruning infeasible branch {branch.id}.")
             continue
-        elif branch_lb >= 0:
+
+        branch_ub = rerun(score, minimizer)
+
+        if branch_lb >= 0:
             print(f"Pruning satisfied branch {branch.id} with bounds: {branch_lb}, {branch_ub}")
+            pruned_lbs.append(branch_lb)
             continue
         elif branch_ub < 0:
             print(f"Counterexample found in branch {branch.id} with bounds: {branch_lb}, {branch_ub}")
             return branch_lb, branch_ub, minimizer
+
+        best_ub = min(best_ub, branch_ub)  # we search for bounds on the minimum of the score!
         
         print(f"Splitting branch {branch.id} with bounds {branch_lb}, {branch_ub}")
         relu_nodes = collect_relu_nodes(score, node_bounds, branch.splits.keys())
-        if not relu_nodes:
-            print("All ReLU nodes split.")
-            # in this case, the planet LP relaxation is precise and the minimizer
-            # for the lower bound is a counterexample
-            return best_lb, best_ub, minimizer
+        # If no ReLU nodes remain, the LP encoding is exact and we should have already exited
+        # this branch above.
+        assert relu_nodes is not None
         
         chosen_relu = choose_relu(relu_nodes)
         relu_input = chosen_relu.prev[0]
@@ -76,5 +79,6 @@ def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
         branches.append(Branch(splits=split2, id=next(ids), depth=branch.depth + 1))
 
     print("All branches pruned.")
+    best_lb = min(pruned_lbs)
     return best_lb, best_ub, None 
    

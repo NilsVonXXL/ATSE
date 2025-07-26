@@ -12,8 +12,6 @@ class Value:
         self._backward = self._noop
         self.prev = _children
         self.op = _op # the op that produced this node, for graphviz / debugging / etc
-    
-
         
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
