@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from copy import deepcopy
+from copy import copy
 from micrograd.engine import Value
 
 
@@ -8,17 +8,24 @@ class Interval:
     lower: float
     upper: float
 
+    def __iter__(self):
+        yield self.lower
+        yield self.upper
+    
 
-def ibp(output: Value, in_bounds: dict[Value, Interval]) -> Interval:
-    env = deepcopy(in_bounds)
+
+def ibp(output: Value, in_bounds: dict[Value, Interval], return_all: bool = False) -> Interval:
+    env = copy(in_bounds)
 
     for v in output.compute_graph():
+        if v in env:
+            continue
+            
         if len(v.prev) == 0:
-            if v not in env:
-                env[v] = Interval(v.data, v.data)
+            env[v] = Interval(v.data, v.data)
         else:
             env[v] = ibp_rules[v.op](*[env[p] for p in v.prev])
-    return env[output]
+    return env[output] if not return_all else env
 
 
 ibp_rules = {
@@ -27,31 +34,14 @@ ibp_rules = {
 }
 
 
-def _ibp_mul_rule(a: Interval | Value, b: Interval | Value) -> Interval:
-    if isinstance(a, Value) and isinstance(b, Value):
-        lb = ub = a.data * b.data
-
-    if isinstance(b, Interval):
-        a, b = b, a
-
-    if isinstance(a, Interval) and isinstance(b, Value):
-        b = b.data
-        if b >= 0:
-            lb = a.lower * b
-            ub = a.upper * b
-        else:
-            lb = a.upper * b
-            ub = a.lower * b
-    else:
-        options = [
-            a.lower * b.lower,
-            a.lower * b.upper,
-            a.upper * b.lower,
-            a.upper * b.upper,
-        ]
-        lb = min(options)
-        ub = max(options)
-    return Interval(lb, ub)
-
+def _ibp_mul_rule(a: Interval, b: Interval) -> Interval:
+    products = [
+        a.lower * b.lower,
+        a.lower * b.upper,
+        a.upper * b.lower,
+        a.upper * b.upper,
+    ]
+    return Interval(min(products), max(products))
 
 ibp_rules["*"] = _ibp_mul_rule
+

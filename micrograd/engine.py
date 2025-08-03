@@ -2,14 +2,16 @@
 class Value:
     """ stores a single scalar value and its gradient """
 
+    def _noop(self):
+        pass
+
     def __init__(self, data, _children=(), _op=''):
         self.data = data
         self.grad = 0
         # internal variables used for autograd graph construction
-        self._backward = lambda: None
-        self.prev = set(_children)
+        self._backward = self._noop
+        self.prev = _children
         self.op = _op # the op that produced this node, for graphviz / debugging / etc
-
         
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
@@ -100,3 +102,4 @@ class Value:
             return f"Value(data={self.data}, grad={self.grad}, op={self.op})"
         else:
             return f"Value(data={self.data}, grad={self.grad})"
+    
