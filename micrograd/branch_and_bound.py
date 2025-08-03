@@ -33,9 +33,47 @@ class Branch:
     splits: dict[Value, Interval]
     id: int
     depth: int = 0
+    
+    
 
+# strong branching heurisitc
+def strong_branching(relu_nodes, score, in_bounds, node_bounds, current_splits):
+    best_node = None
+    best_score = float('-inf')
 
-def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
+    for node in relu_nodes:
+        relu_input = node.prev[0]
+        relu_input_lb, relu_input_ub = node_bounds[relu_input]
+
+        # Split 1: input <= 0
+        split1 = current_splits | {relu_input: Interval(relu_input_lb, 0.0)}
+        lb1, _ = planet_relaxation(score, in_bounds, node_bounds | split1)
+
+        # Split 2: input >= 0
+        split2 = current_splits | {relu_input: Interval(0.0, relu_input_ub)}
+        lb2, _ = planet_relaxation(score, in_bounds, node_bounds | split2)
+
+        score_val = max(lb1, lb2) 
+        #score_val = min(lb1, lb2) 
+        
+        # upper
+        # ub1 = rerun(score, minimizer1)
+        # ub2 = rerun(score, minimizer2)
+        # score_val = ... # combine lb/ub as you wish
+
+        if score_val > best_score:
+            best_score = score_val
+            best_node = node
+
+    return best_node
+    
+    
+#FIXME: call strong branching like this:
+#chosen_relu = choose_relu(relu_nodes, score, in_bounds, node_bounds, branch.splits)
+    
+def branch_and_bound(score, in_bounds):
+    branch_counter = 0
+    
     node_bounds = ibp(score, in_bounds, return_all=True)
 
     ids = itertools.count(0)
@@ -59,7 +97,7 @@ def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
             continue
         elif branch_ub < 0:
             print(f"Counterexample found in branch {branch.id} with bounds: {branch_lb}, {branch_ub}")
-            return branch_lb, branch_ub, minimizer
+            return branch_lb, branch_ub, minimizer #FIXME: invalid lower bound(not min lower bound)
 
         best_ub = min(best_ub, branch_ub)  # we search for bounds on the minimum of the score!
         
@@ -69,7 +107,11 @@ def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
         # this branch above.
         assert relu_nodes is not None
         
-        chosen_relu = choose_relu(relu_nodes)
+        #choosing with strong branching
+        chosen_relu = strong_branching(relu_nodes, score, in_bounds, node_bounds, branch.splits)
+        #chosen_relu = relu_nodes[0]
+        branch_counter += 1
+        
         relu_input = chosen_relu.prev[0]
         relu_input_lb, relu_input_ub = node_bounds[relu_input]
 
@@ -79,6 +121,9 @@ def branch_and_bound(score, in_bounds, choose_relu=simple_deterministic):
         branches.append(Branch(splits=split2, id=next(ids), depth=branch.depth + 1))
 
     print("All branches pruned.")
+    print("=" * 80)
+    print(branch_counter)
+    print("*" * 80)
     best_lb = min(pruned_lbs)
     return best_lb, best_ub, None 
    
