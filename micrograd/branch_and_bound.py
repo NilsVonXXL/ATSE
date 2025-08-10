@@ -53,13 +53,7 @@ def strong_branching(relu_nodes, score, in_bounds, node_bounds, current_splits):
         split2 = current_splits | {relu_input: Interval(0.0, relu_input_ub)}
         lb2, _ = planet_relaxation(score, in_bounds, node_bounds | split2)
 
-        score_val = max(lb1, lb2) 
-        #score_val = min(lb1, lb2) 
-        
-        # upper
-        # ub1 = rerun(score, minimizer1)
-        # ub2 = rerun(score, minimizer2)
-        # score_val = ... # combine lb/ub as you wish
+        score_val = min(lb1, lb2) 
 
         if score_val > best_score:
             best_score = score_val
@@ -126,4 +120,8 @@ def branch_and_bound(score, in_bounds):
     print("*" * 80)
     best_lb = min(pruned_lbs)
     return best_lb, best_ub, None 
+
+if __name__== "__main__": 
+    #arg parse
+    pass
    
