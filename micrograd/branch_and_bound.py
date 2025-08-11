@@ -40,6 +40,7 @@ class Branch:
 def strong_branching(relu_nodes, score, in_bounds, node_bounds, current_splits):
     best_node = None
     best_score = float('-inf')
+    all_bounds = []
 
     for node in relu_nodes:
         relu_input = node.prev[0]
@@ -53,20 +54,29 @@ def strong_branching(relu_nodes, score, in_bounds, node_bounds, current_splits):
         split2 = current_splits | {relu_input: Interval(0.0, relu_input_ub)}
         lb2, _ = planet_relaxation(score, in_bounds, node_bounds | split2)
 
+        all_bounds.append({
+            'relu_node': node,
+            'split1_lb': lb1,
+            'split2_lb': lb2,
+            'split1_bounds': (relu_input_lb, 0.0),
+            'split2_bounds': (0.0, relu_input_ub)
+        })
+
         score_val = min(lb1, lb2) 
 
         if score_val > best_score:
             best_score = score_val
             best_node = node
 
-    return best_node
+    return best_node, all_bounds
     
     
-#FIXME: call strong branching like this:
-#chosen_relu = choose_relu(relu_nodes, score, in_bounds, node_bounds, branch.splits)
-    
+#FIXME: Watch out for new "all_bounds" return of strong branching
+
+  
 def branch_and_bound(score, in_bounds):
     branch_counter = 0
+    branch_lp_bounds = []
     
     node_bounds = ibp(score, in_bounds, return_all=True)
 
@@ -102,8 +112,10 @@ def branch_and_bound(score, in_bounds):
         assert relu_nodes is not None
         
         #choosing with strong branching
-        chosen_relu = strong_branching(relu_nodes, score, in_bounds, node_bounds, branch.splits)
-        #chosen_relu = relu_nodes[0]
+        chosen_relu, all_bounds = strong_branching(relu_nodes, score, in_bounds, node_bounds, branch.splits)
+        branch_lp_bounds.append(all_bounds)
+        
+        
         branch_counter += 1
         
         relu_input = chosen_relu.prev[0]
@@ -119,7 +131,9 @@ def branch_and_bound(score, in_bounds):
     print(branch_counter)
     print("*" * 80)
     best_lb = min(pruned_lbs)
-    return best_lb, best_ub, None 
+    return best_lb, best_ub, None, branch_lp_bounds
+
+#FIXME watch out for new "branch_lp_bounds" return
 
 if __name__== "__main__": 
     #arg parse
