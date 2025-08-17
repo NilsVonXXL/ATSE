@@ -69,8 +69,7 @@ def strong_branching(relu_nodes, score, in_bounds, node_bounds, current_splits):
             best_node = node
 
     return best_node, all_bounds
-    
-    
+
 #FIXME: Watch out for new "all_bounds" return of strong branching
 
   
