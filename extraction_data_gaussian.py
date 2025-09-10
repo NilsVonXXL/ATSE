@@ -29,8 +29,7 @@ input_combinations = list(itertools.product(x_vals, y_vals, eps_vals))
 model_paths = glob.glob("models/model_gaussian_*.pkl")
 for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
-    if number in ["1", "14"]:
-        continue
+    
     net_folder = os.path.join("dataset", "gaussian", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
@@ -46,7 +45,7 @@ for model_path in tqdm(model_paths, desc="Models"):
         input_vars = [Value(val) for val in input_vals]
         in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in input_vars}
         score = model(input_vars)
-        if (0 <= score.data <= 2):
+        if (0 <= score.data <= 1.75):
             continue
 
         best_lb, best_ub, minimizer, branch_lp_bounds, relu_indexes_list = branch_and_bound(score, in_bounds)

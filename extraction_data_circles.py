@@ -29,8 +29,7 @@ input_combinations = list(itertools.product(x_vals, y_vals, eps_vals))
 model_paths = glob.glob("models/model_circles_*.pkl")
 for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
-    if number == "14":
-        continue
+    
     net_folder = os.path.join("dataset", "circles", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
