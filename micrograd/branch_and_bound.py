@@ -95,7 +95,11 @@ def branch_and_bound(score, in_bounds):
     while len(branches) > 0:
         branch = branches.pop(0)
 
-        branch_lb, minimizer = planet_relaxation(score, in_bounds, node_bounds | branch.splits)
+        try:
+            branch_lb, minimizer = planet_relaxation(score, in_bounds, node_bounds | branch.splits)
+        except Exception as e:
+            print(f"planet_relaxation failed: {e}")
+            branch_lb, minimizer = None, None
 
         if branch_lb == float('inf'):
             #print(f"Pruning infeasible branch {branch.id}.")

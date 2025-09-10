@@ -31,7 +31,7 @@ for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
     if number == "4":
         continue
-    net_folder = os.path.join("dataset", f"data-{dataset}", f"{number}")
+    net_folder = os.path.join("dataset", "moons", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
     # Load model and save weights
