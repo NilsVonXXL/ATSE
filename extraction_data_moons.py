@@ -8,7 +8,6 @@ import os
 import json
 import glob
 from tqdm import tqdm
-import sys
 
 def input_folder_name(x, y, eps):
     return f"input-x-{x}-y-{y}-eps-{eps}"
@@ -26,21 +25,22 @@ y_vals = np.round(np.arange(-2.0, 2.51, 0.1), 2)
 eps_vals = np.round(np.arange(0.25, 0.41, 0.1), 2)
 input_combinations = list(itertools.product(x_vals, y_vals, eps_vals))
 
-# Iterate through all models
-model_paths = glob.glob("models/*.pkl")
+# Only handle model_moons
+model_paths = glob.glob("models/model_moons_*.pkl")
 for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
+    if number == "4":
+        continue
     net_folder = os.path.join("dataset", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
     # Load model and save weights
     with open(model_path, "rb") as f:
         model = pickle.load(f)
-    weights = [p for p in model.parameters()] # For GNN edge extraction
+    weights = [p for p in model.parameters()]
     with open(os.path.join(net_folder, "parameters.pkl"), "wb") as f:
         pickle.dump(weights, f)
 
-    # Iterate through all input combinations
     for idx, (x, y, eps) in enumerate(tqdm(input_combinations, desc=f"Inputs for {dataset}-{number}", leave=False)):
         input_vals = [x, y]
         input_vars = [Value(val) for val in input_vals]
@@ -49,10 +49,7 @@ for model_path in tqdm(model_paths, desc="Models"):
         if (0 <= score.data <= 2):
             continue
 
-        # Run branch-and-bound
         best_lb, best_ub, minimizer, branch_lp_bounds, relu_indexes_list = branch_and_bound(score, in_bounds)
-
-        # Only keep points with at least one branching step
         if not branch_lp_bounds:
             continue
 
@@ -71,11 +68,8 @@ for model_path in tqdm(model_paths, desc="Models"):
         for step_idx, (step_bounds, relu_indexes) in enumerate(zip(branch_lp_bounds, relu_indexes_list)):
             step_folder = os.path.join(input_folder, f"step_{step_idx}")
             os.makedirs(step_folder, exist_ok=True)
-
-            # Save relu_indexes as relu_nodes.json
             with open(os.path.join(step_folder, "relu_nodes.json"), "w") as f:
                 json.dump(relu_indexes, f)
-
             branching_table = []
             for relu_idx, relu_info in enumerate(step_bounds):
                 entry = {
@@ -86,6 +80,5 @@ for model_path in tqdm(model_paths, desc="Models"):
                     "split_right_ub": relu_info["split2_bounds"][1],
                 }
                 branching_table.append(entry)
-
             with open(os.path.join(step_folder, "strong_branching.pkl"), "wb") as f:
                 pickle.dump(branching_table, f)
