@@ -30,7 +30,7 @@ model_paths = glob.glob("models/model_blobs_*.pkl")
 for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
     
-    net_folder = os.path.join("dataset", "blobs", f"data-{dataset}", f"{number}")
+    net_folder = os.path.join("blobs", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
     # Load model and save weights
