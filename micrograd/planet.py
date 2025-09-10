@@ -77,7 +77,7 @@ def planet_relaxation(output: Value, in_bounds, node_bounds):
         result_lower = prob_lower.solve()
     except Exception as e:
         print(f"Solver failed: {e}")
-        result_lower = None
+        return float('inf'), None  
     minimizer_lower = {in_node: env[in_node].value for in_node in in_bounds}
     
     return result_lower, minimizer_lower

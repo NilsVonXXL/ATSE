@@ -22,7 +22,7 @@ def parse_model_info(model_path):
 # Input grid
 x_vals = np.round(np.arange(-2.0, 2.51, 0.1), 2)
 y_vals = np.round(np.arange(-2.0, 2.51, 0.1), 2)
-eps_vals = np.round(np.arange(0.25, 0.41, 0.1), 2)
+eps_vals = np.round(np.arange(0.15, 0.41, 0.1), 2)
 input_combinations = list(itertools.product(x_vals, y_vals, eps_vals))
 
 # Only handle model_moons
@@ -45,7 +45,7 @@ for model_path in tqdm(model_paths, desc="Models"):
         input_vars = [Value(val) for val in input_vals]
         in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in input_vars}
         score = model(input_vars)
-        if (0 <= score.data <= 1.75):
+        if not (0 <= score.data <= 1.75):
             continue
 
         best_lb, best_ub, minimizer, branch_lp_bounds, relu_indexes_list = branch_and_bound(score, in_bounds)
