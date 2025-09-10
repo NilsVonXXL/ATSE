@@ -40,7 +40,7 @@ for model_path in tqdm(model_paths, desc="Models"):
     with open(os.path.join(net_folder, "parameters.pkl"), "wb") as f:
         pickle.dump(weights, f)
 
-    for idx, (x, y, eps) in enumerate(tqdm(input_combinations, desc=f"Inputs for {dataset}-{number}", leave=False)):
+    for idx, (x, y, eps) in enumerate(input_combinations):
         input_vals = [x, y]
         input_vars = [Value(val) for val in input_vals]
         in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in input_vars}

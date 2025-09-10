@@ -3,11 +3,11 @@ import pickle
 import json
 
 # Set the root folder for test data
-root = "test-data-moons/1"
+root = "circles/data-circles/14"
 print(f"Checking contents of: {root}")
 
 # Print parameters
-params_path = os.path.join(root, "test-parameters.pkl")
+params_path = os.path.join(root, "parameters.pkl")
 if os.path.exists(params_path):
     with open(params_path, "rb") as f:
         weights = pickle.load(f)
@@ -20,12 +20,12 @@ else:
     print("No parameters file found.")
 
 # List input folders
-input_folders = [d for d in os.listdir(root) if d.startswith("test-x-")]
+input_folders = [d for d in os.listdir(root) if d.startswith("x-")]
 print("Input folders:", input_folders)
 
 for input_folder in input_folders:
     input_path = os.path.join(root, input_folder)
-    info_path = os.path.join(input_path, "test-info.pkl")
+    info_path = os.path.join(input_path, "info.pkl")
     if os.path.exists(info_path):
         with open(info_path, "rb") as f:
             info = pickle.load(f)
@@ -35,12 +35,12 @@ for input_folder in input_folders:
         print(f"No info.pkl in {input_folder}")
 
     # List branching steps
-    step_folders = [d for d in os.listdir(input_path) if d.startswith("test-step_")]
+    step_folders = [d for d in os.listdir(input_path) if d.startswith("step_")]
     print("  Branching steps:", step_folders)
     for step_folder in step_folders:
         step_path = os.path.join(input_path, step_folder)
-        relu_json = os.path.join(step_path, "test-relu_nodes.json")
-        branching_pkl = os.path.join(step_path, "test-strong_branching.pkl")
+        relu_json = os.path.join(step_path, "relu_nodes.json")
+        branching_pkl = os.path.join(step_path, "strong_branching.pkl")
         if os.path.exists(relu_json):
             with open(relu_json, "r") as f:
                 relu_status = json.load(f)

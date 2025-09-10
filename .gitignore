@@ -1,6 +1,10 @@
 .vscode/
 dataset/
-
+blobs/
+moons/
+gaussian/
+circles/
+classification/
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
