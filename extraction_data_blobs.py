@@ -30,6 +30,9 @@ model_paths = glob.glob("models/model_blobs_*.pkl")
 for model_path in tqdm(model_paths, desc="Models"):
     dataset, number = parse_model_info(model_path)
     
+    if number in ['2', '4']:
+        continue
+    
     net_folder = os.path.join("blobs", f"data-{dataset}", f"{number}")
     os.makedirs(net_folder, exist_ok=True)
 
