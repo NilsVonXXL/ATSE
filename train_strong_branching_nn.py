@@ -4,9 +4,10 @@ import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 import numpy as np
 import re
+
 
 # --- CONFIG ---
 DATA_DIR = 'newDataset'  # Use newDataset as source
@@ -126,22 +127,39 @@ def main():
     relu_dim = 32
     inputs_dim = 3
     input_dim = weights_dim + relu_dim + inputs_dim
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    # Split dataset: 70% train, 20% val, 10% test
+    total_size = len(dataset)
+    train_size = int(0.7 * total_size)
+    val_size = int(0.2 * total_size)
+    test_size = total_size - train_size - val_size
+    train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size])
+    train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=BATCH_SIZE)
+    test_loader = DataLoader(test_set, batch_size=BATCH_SIZE)
     model = FeedForwardNN(input_dim)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
     for epoch in range(EPOCHS):
         model.train()
         total_loss = 0
-        for features, target in loader:
+        for features, target in train_loader:
             optimizer.zero_grad()
             output = model(features)
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * features.size(0)
-        avg_loss = total_loss / len(dataset)
-        print(f'Epoch {epoch+1}/{EPOCHS} - Loss: {avg_loss:.4f}')
+        avg_loss = total_loss / len(train_set)
+        # Validation loss
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for features, target in val_loader:
+                output = model(features)
+                loss = criterion(output, target)
+                val_loss += loss.item() * features.size(0)
+        avg_val_loss = val_loss / len(val_set)
+        print(f'Epoch {epoch+1}/{EPOCHS} - Train Loss: {avg_loss:.4f} - Val Loss: {avg_val_loss:.4f}')
     torch.save(model.state_dict(), 'strong_branching_nn.pt')
     print('Model saved to strong_branching_nn.pt')
 
