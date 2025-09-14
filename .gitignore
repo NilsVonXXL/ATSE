@@ -2,6 +2,7 @@
 #####Nils ATSE Gitignore#####
 newDataset
 oldDataset
+latex
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
