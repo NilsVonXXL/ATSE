@@ -63,7 +63,9 @@ class DeepThought42(gym.Env):
         # Load model weights
         with open(chosen_model, 'rb') as f:
             self.model = pickle.load(f)
-        weights_flat = np.array([w.data for w in self.model], dtype=np.float32)
+        weights = [p for p in self.model.parameters()]
+        weights_flat = np.array([w.data for w in weights], dtype=np.float32)
+        #FIXME: use parameters pkl instead
 
         # Parse inputs from folder name
         match = re.match(r'input-x-([-\d.]+)-y-([-\d.]+)-eps-([-\d.]+)', os.path.basename(chosen_input))
@@ -102,8 +104,10 @@ class DeepThought42(gym.Env):
         self.relu_status = next_relu_status
 
         # Build next state
-        weights_flat = np.array([w.data for w in self.model], dtype=np.float32)
+        weights = [p for p in self.model.parameters()]
+        weights_flat = np.array([w.data for w in weights], dtype=np.float32)
         inputs_vec = np.array(self.inputs, dtype=np.float32)
+        #FIXME: check if necessary to get new weights and inputs
         next_state = np.concatenate([weights_flat, inputs_vec, self.relu_status])
         self.state = next_state
 
