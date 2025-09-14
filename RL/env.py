@@ -9,7 +9,7 @@ from rl.bab_rl import bab_step
 from micrograd.ibp import Interval
 from micrograd.engine import Value
 
-class BranchingEnv(gym.Env):
+class DeepThought42(gym.Env):
     def __init__(self, models_dir, dataset_dir):
         super().__init__()
         self.models_dir = models_dir
