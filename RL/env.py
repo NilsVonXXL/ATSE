@@ -76,14 +76,21 @@ class BranchingEnv(gym.Env):
             self.inputs = [0.0, 0.0, 0.0]
         inputs_vec = np.array(self.inputs, dtype=np.float32)
 
+        # Set initial bounds
         tmp = [Value(x), Value(y)]
         self.in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in tmp}
-        # Initial bounds and splits
-        self.splits = dict()
-        self.score = ...      # TODO: set output node
-        relu_nodes = ...      # TODO: get initial relu nodes
+
+        # Load initial relu nodes from step_0 folder
+        step0_path = os.path.join(chosen_input, 'step_0')
+        relu_json_path = os.path.join(step0_path, 'relu_nodes.json')
+        with open(relu_json_path, 'r') as f:
+            relu_dic = json.load(f)
+        relu_nodes = np.array(list(relu_dic.values()), dtype=np.float32)
         self.relu_status = relu_nodes
 
+        # Initial splits
+        self.splits = dict()
+        self.score = self.model(self.in_bounds)
         # Build initial state
         self.state = np.concatenate([weights_flat, inputs_vec, relu_nodes])
         return self.state, {}
