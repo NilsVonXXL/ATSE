@@ -6,7 +6,7 @@ import pickle
 import os
 import json
 from rl.bab_rl import bab_step
-from micrograd.ibp import Interval
+from micrograd.ibp import Interval, ibp
 from micrograd.engine import Value
 
 class DeepThought42(gym.Env):
@@ -57,18 +57,23 @@ class DeepThought42(gym.Env):
         self.relu_status = None
 
     def reset(self, seed=None, options=None):
-        # Randomly select a model and input
-        chosen_model, chosen_input, _ = random.choice(self.initial_states)
+        weights_path, input_path, input_folder = random.choice(self.initial_states)
 
-        # Load model weights
-        with open(chosen_model, 'rb') as f:
+        weights_path = os.path.normpath(weights_path)
+        parts = weights_path.split(os.sep)
+        domain = parts[-4]      # 'blobs'
+        net_num = parts[-2]     # '2'
+        model_name = f"model_{domain}_{net_num}.pkl"
+        model_path = os.path.join(self.models_dir, model_name)
+
+        # Load the model from models/
+        with open(model_path, 'rb') as f:
             self.model = pickle.load(f)
         weights = [p for p in self.model.parameters()]
-        weights_flat = np.array([w.data for w in weights], dtype=np.float32)
-        #FIXME: use parameters pkl instead
+        self.weights_flat = np.array([w.data for w in weights], dtype=np.float32)
 
         # Parse inputs from folder name
-        match = re.match(r'input-x-([-\d.]+)-y-([-\d.]+)-eps-([-\d.]+)', os.path.basename(chosen_input))
+        match = re.match(r'input-x-([-\d.]+)-y-([-\d.]+)-eps-([-\d.]+)', input_folder)
         if match:
             x = float(match.group(1))
             y = float(match.group(2))
@@ -76,47 +81,76 @@ class DeepThought42(gym.Env):
             self.inputs = [x, y, eps]
         else:
             self.inputs = [0.0, 0.0, 0.0]
-        inputs_vec = np.array(self.inputs, dtype=np.float32)
+        self.inputs_vec = np.array(self.inputs, dtype=np.float32)
 
         # Set initial bounds
         tmp = [Value(x), Value(y)]
         self.in_bounds = {xi: Interval(xi.data - eps, xi.data + eps) for xi in tmp}
 
         # Load initial relu nodes from step_0 folder
-        step0_path = os.path.join(chosen_input, 'step_0')
+        step0_path = os.path.join(input_path, 'step_0')
         relu_json_path = os.path.join(step0_path, 'relu_nodes.json')
         with open(relu_json_path, 'r') as f:
             relu_dic = json.load(f)
         relu_nodes = np.array(list(relu_dic.values()), dtype=np.float32)
         self.relu_status = relu_nodes
+        #print(self.relu_status)
 
         # Initial splits
         self.splits = dict()
         self.score = self.model(self.in_bounds)
+        self.node_bounds = ibp(self.score, self.in_bounds, return_all=True)
+
         # Build initial state
-        self.state = np.concatenate([weights_flat, inputs_vec, relu_nodes])
-        return self.state, {}
+        self.state = np.concatenate([self.weights_flat, self.inputs_vec, relu_nodes])
+        
+        info = {
+            "score": self.score.data,
+            "relu_nodes": self.relu_status
+        }
+        #print(weights_path, input_path,input_folder)
+        #print(info)
+        return self.state, info
 
     def step(self, action):
-        # Call bab_step
-        next_splits, next_relu_status, done = bab_step(self.score, self.in_bounds, self.splits, action)
+        # Call bab_step with node_bounds as input
+        next_splits, next_relu_status, done, info = bab_step(self.score, self.in_bounds, self.node_bounds, self.splits, action)
+        self.relu_status = np.array(list(next_relu_status.values()), dtype=np.float32)
         self.splits = next_splits
-        self.relu_status = next_relu_status
+        self.inputs = self.inputs_vec
 
         # Build next state
-        weights = [p for p in self.model.parameters()]
-        weights_flat = np.array([w.data for w in weights], dtype=np.float32)
-        inputs_vec = np.array(self.inputs, dtype=np.float32)
-        #FIXME: check if necessary to get new weights and inputs
-        next_state = np.concatenate([weights_flat, inputs_vec, self.relu_status])
+        weights_flat = self.weights_flat
+        next_state = np.concatenate([weights_flat, self.inputs_vec, self.relu_status])
         self.state = next_state
 
-        reward = -1  # Each split gets -1 reward
+        if info.get("invalid_action", False):
+            reward = info["penalty"]
+            #print("Invalid action taken!")
+        else:
+            reward = -1  # normal step reward
+            #print("Valid action taken.")
+        
+        info = {
+            "splits": self.splits.copy(),
+            "relu_status": self.relu_status.copy(),
+            "action": int(action),
+            "reward": reward,
+            "done": done
+        }
+        #print("x"*20)
+        #print(info["action"], info["reward"], info["done"])
 
-        return self.state, reward, done, False, {}
+        terminated = done
+        truncated = False
+        return self.state, reward, terminated, truncated, info
 
     def render(self):
         pass
 
     def close(self):
         pass
+    
+    def get_action_mask(self):
+    # Returns a boolean mask: True for valid actions, False for invalid
+        return (self.relu_status == 1)
