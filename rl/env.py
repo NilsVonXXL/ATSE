@@ -128,7 +128,7 @@ class DeepThought42(gym.Env):
             reward = info["penalty"]
             #print("Invalid action taken!")
         else:
-            reward = -1  # normal step reward
+            reward = -1.3  # normal step reward
             #print("Valid action taken.")
         
         info = {

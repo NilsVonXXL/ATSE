@@ -7,6 +7,12 @@ import torch
 import numpy as np
 import random
 from stable_baselines3.common.callbacks import CheckpointCallback
+import os
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+DATASET_DIR = os.path.join(BASE_DIR, "newDataset")
+
 
 seed = 42
 # Register environment
@@ -23,8 +29,8 @@ def mask_fn(env):
 
 env = gym.make(
     "DeepThought42-v0",
-    models_dir="c:/ATSE/ATSE/models",
-    dataset_dir="c:/ATSE/ATSE/newDataset",
+    models_dir=MODELS_DIR,
+    dataset_dir=DATASET_DIR,
 )
 # Wrap the environment for action masking
 env = ActionMasker(env, mask_fn)
