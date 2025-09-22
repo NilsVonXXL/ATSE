@@ -25,6 +25,10 @@ class DeepThought42(gym.Env):
             dtype=np.float32
         )
 
+        # Step counter for reward scaling
+        self._step_count = 0
+        self._reward = -1
+
         # Gather all (model_path, input_folder) pairs
         self.initial_states = []
         for domain in os.listdir(self.dataset_dir):
@@ -58,6 +62,7 @@ class DeepThought42(gym.Env):
 
     def reset(self, seed=None, options=None):
         weights_path, input_path, input_folder = random.choice(self.initial_states)
+        self._step_count = 0  # Reset step counter at the start of each episode
 
         weights_path = os.path.normpath(weights_path)
         parts = weights_path.split(os.sep)
@@ -124,12 +129,14 @@ class DeepThought42(gym.Env):
         next_state = np.concatenate([weights_flat, self.inputs_vec, self.relu_status])
         self.state = next_state
 
-        if info.get("invalid_action", False):
-            reward = info["penalty"]
-            #print("Invalid action taken!")
+        if self._step_count == 0:
+            pass
         else:
-            reward = -1.3  # normal step reward
-            #print("Valid action taken.")
+            # Multiply reward by 1.3 for each step in the episode
+            self._reward = self._reward ** self._step_count
+
+        self._step_count += 1
+        reward = -1
         
         info = {
             "splits": self.splits.copy(),
