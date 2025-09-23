@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import random
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,15 +28,24 @@ def mask_fn(env):
         env = env.env
     return env.get_action_mask()
 
-env = gym.make(
-    "DeepThought42-v0",
-    models_dir=MODELS_DIR,
-    dataset_dir=DATASET_DIR,
-)
-# Wrap the environment for action masking
-env = ActionMasker(env, mask_fn)
+def make_env(rank):
+    def _init():
+        env = gym.make(
+            "DeepThought42-v0",
+            models_dir=MODELS_DIR,
+            dataset_dir=DATASET_DIR,
+        )
+        env = ActionMasker(env, mask_fn)
+        env.reset(seed=seed + rank)
+        return env
+    return _init
 
-env.reset(seed=seed)
+num_envs = 4  
+env = SubprocVecEnv([make_env(i) for i in range(num_envs)])
+
+torch.manual_seed(seed)
+np.random.seed(seed)
+random.seed(seed)
 torch.manual_seed(seed)
 np.random.seed(seed)
 random.seed(seed)
@@ -55,21 +65,29 @@ checkpoint_callback = CheckpointCallback(
 )
 
 model.learn(
-    total_timesteps=30_000,
+    total_timesteps=50_000,
     tb_log_name="first_run",
     progress_bar=True,
     callback=checkpoint_callback
 )
 
-obs, info = env.reset(seed=seed)
+
+# --- Evaluation Loop (single env for demo) ---
+eval_env = gym.make(
+    "DeepThought42-v0",
+    models_dir=MODELS_DIR,
+    dataset_dir=DATASET_DIR,
+)
+eval_env = ActionMasker(eval_env, mask_fn)
+obs, info = eval_env.reset(seed=seed)
 for i in range(1000):
     action, _states = model.predict(obs, deterministic=True)
     action = int(action)  # <-- Ensure action is an integer
-    obs, reward, done, truncated, info = env.step(action)
-    env.render()
+    obs, reward, done, truncated, info = eval_env.step(action)
+    eval_env.render()
     if done:
-        obs, info = env.reset(seed=seed)
+        obs, info = eval_env.reset(seed=seed)
 
 model.save("ppo_deepthought42")
 
-env.close()
+eval_env.close()

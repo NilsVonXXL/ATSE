@@ -2,9 +2,9 @@ from sb3_contrib import MaskablePPO
 from step_depth.env import DeepThought42 
 import pickle
 import os
-import tqdm
+from tqdm import tqdm
 
-ppo_model = MaskablePPO.load("step_depth/ppo_deepthought42_eval")
+ppo_model = MaskablePPO.load("ppo_deepthought42_eval")
 
 stepdepth = []
 initial_states = []

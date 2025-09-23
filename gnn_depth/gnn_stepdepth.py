@@ -3,7 +3,7 @@ import pickle
 import os
 from step_depth.env import DeepThought42
 from train_strong_branching_nn import FeedForwardNN
-import tqdm
+from tqdm import tqdm
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
