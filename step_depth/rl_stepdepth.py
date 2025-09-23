@@ -47,7 +47,7 @@ for w, i, f in tqdm(initial_states, desc="Evaluating PPO on instances"):
         action = int(action) 
         obs, reward, done, truncated, info = env.step(action)
         steps += 1
-    print("For", w, i, f, "solved in", steps, "steps")
+    #print("For", w, i, f, "solved in", steps, "steps")
     stepdepth.append(steps)
 
 with open("stepdepth.pkl", "wb") as f:
