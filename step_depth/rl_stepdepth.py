@@ -2,8 +2,9 @@ from sb3_contrib import MaskablePPO
 from step_depth.env import DeepThought42 
 import pickle
 import os
+import tqdm
 
-ppo_model = MaskablePPO.load("step_depth/ppo_deepthought42")
+ppo_model = MaskablePPO.load("step_depth/ppo_deepthought42_eval")
 
 stepdepth = []
 initial_states = []
@@ -35,7 +36,7 @@ for domain in os.listdir(DATASET_DIR):
 
 
 
-for w, i, f in initial_states:
+for w, i, f in tqdm(initial_states, desc="Evaluating PPO on instances"):
     env = DeepThought42(models_dir=MODELS_DIR, initial_states=(w, i, f))
     obs, info = env.reset()
     done = False
@@ -43,7 +44,7 @@ for w, i, f in initial_states:
     while not done:
         action_mask = env.get_action_mask()
         action, _ = ppo_model.predict(obs, deterministic=True, action_masks=action_mask)
-        action = int(action)  # <-- Ensure action is an integer
+        action = int(action) 
         obs, reward, done, truncated, info = env.step(action)
         steps += 1
     print("For", w, i, f, "solved in", steps, "steps")
