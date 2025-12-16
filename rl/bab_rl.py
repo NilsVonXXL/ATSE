@@ -41,39 +41,35 @@ def collect_relu_nodes(output_node, node_bounds, splitted_nodes=()):
 
 @dataclass
 class Branch:
-    # the bounds for the *inputs* of the ReLUs that have been split
-    splits: dict[Value, Interval]
-    id: int
-    depth: int = 0
+    splits: dict  # {Value: Interval} constraints for this branch
+    node_bounds: dict  # {Value: Interval} bounds for all nodes in this branch
+    relu_indexes: dict  # {int: int} status of ReLUs (active/inactive) for observation
     
 
-def bab_step(score, in_bounds, node_bounds, splits, action):
+
+def bab_step(score, in_bounds, branch: Branch, action):
     """
-    Perform one BaB step for RL.
-    score: output node
-    in_bounds: input bounds
-    splits: dict of already applied splits {Value: Interval}
-    action: index of relu node to split (from splittable nodes)
-    Returns: next_splits, relu_status, done, info
+    Expand a branch at the given action (ReLU index).
+    Returns a list of valid child Branch objects (0, 1, or 2).
+    Each Branch contains splits, node_bounds, relu_indexes.
     """
-    relu_nodes, relu_indexes = collect_relu_nodes(score, node_bounds, splits.keys())
-    
-    #print(relu_indexes)
-    #print(relu_indexes[action])
+    splits = branch.splits
+    node_bounds = branch.node_bounds
+    relu_indexes = branch.relu_indexes.copy()
+
+    relu_nodes, relu_status = collect_relu_nodes(score, node_bounds, splits.keys())
     # Check if action is valid
-    if relu_indexes[action] == 0:
-        # Invalid action: penalize and terminate
-        done = True
-        penalty = -100  # or any large negative value
-        return splits, relu_indexes, done, {"invalid_action": True, "penalty": penalty}
+    if relu_status[action] == 0:
+        # Invalid action: return empty list (caller can penalize)
+        return []
     
+    # Find the actual ReLU node to split
     c = -1
-    for i, _ in enumerate(relu_indexes):
-        if relu_indexes[i] == 1:
+    for i, _ in enumerate(relu_status):
+        if relu_status[i] == 1:
             c += 1
         if i == action:
             break
-        
     chosen_relu = relu_nodes[c]
     relu_input = chosen_relu.prev[0]
     relu_input_lb, relu_input_ub = node_bounds[relu_input]
@@ -82,66 +78,58 @@ def bab_step(score, in_bounds, node_bounds, splits, action):
     split1 = splits | {relu_input: Interval(relu_input_lb, 0.0)}
     split2 = splits | {relu_input: Interval(0.0, relu_input_ub)}
 
+    children = []
+    done = False
+
     # Evaluate split1
     try:
         branch_lb1, minimizer1 = planet_relaxation(score, in_bounds, node_bounds | split1)
     except Exception as e:
         print(f"planet_relaxation failed for split1: {e}")
-        branch_lb1, minimizer1 = float('inf'), float('inf')
-
-    if branch_lb1 == float('inf'):
-        branch_ub1 = float('inf')  # Prune infeasible branch, do not call rerun
-    else:
+        branch_lb1, minimizer1 = float('inf'), None
+    if branch_lb1 != float('inf'):
         try:
             branch_ub1 = rerun(score, minimizer1)
+            print(f"branch_ub1: {branch_ub1}")  # Debugging
         except Exception as e:
             print(f"rerun failed for split1: {e}")
             branch_ub1 = float('inf')
+    else:
+        branch_ub1 = float('inf')
+
+    # Only add child if not pruned
+    if branch_lb1 != float('inf') and branch_lb1 < 0 and branch_ub1 >= 0:
+        new_relu_indexes = relu_indexes.copy()
+        new_relu_indexes[action] = 0
+        new_node_bounds = ibp(score, in_bounds, return_all=True)
+        children.append(Branch(splits=split1, node_bounds=new_node_bounds, relu_indexes=new_relu_indexes))
+        done = False
 
     # Evaluate split2
     try:
         branch_lb2, minimizer2 = planet_relaxation(score, in_bounds, node_bounds | split2)
     except Exception as e:
         print(f"planet_relaxation failed for split2: {e}")
-        branch_lb2, minimizer2 = float('inf'), float('inf')
-
-    if branch_lb2 == float('inf'):
-        branch_ub2 = float('inf')  # Prune infeasible branch, do not call rerun
-    else:
+        branch_lb2, minimizer2 = float('inf'), None
+    if branch_lb2 != float('inf'):
         try:
             branch_ub2 = rerun(score, minimizer2)
+            print(f"branch_ub2: {branch_ub2}")  # Debugging
         except Exception as e:
             print(f"rerun failed for split2: {e}")
             branch_ub2 = float('inf')
+    else:
+        branch_ub2 = float('inf')
 
-    # Decision logic
-    # If both splits are prunable (lb >= 0), verification is complete
-    if branch_lb1 != float('inf') and branch_lb2 != float('inf') and branch_lb1 >= 0 and branch_lb2 >= 0:
-        done = True
-        return splits, relu_indexes, done, {}
+    if branch_lb2 != float('inf') and branch_lb2 < 0 and branch_ub2 >= 0:
+        new_relu_indexes = relu_indexes.copy()
+        new_relu_indexes[action] = 0
+        new_node_bounds = ibp(score, in_bounds, return_all=True)
+        children.append(Branch(splits=split2, node_bounds=new_node_bounds, relu_indexes=new_relu_indexes))
+        done = False
 
-    # If counterexample found in either split (ub < 0), verification is complete
+    # Counterexample
     if branch_ub1 < 0 or branch_ub2 < 0:
         done = True
-        return splits, relu_indexes, done, {}
 
-    # If one split is infeasible (lb == inf), choose the other one
-    if branch_lb1 == float('inf') and branch_lb2 != float('inf'):
-        chosen_split = split2
-    elif branch_lb2 == float('inf') and branch_lb1 != float('inf'):
-        chosen_split = split1
-    # If both are infeasible
-    #TODO: handle this case better
-    elif branch_lb1 == float('inf') and branch_lb2 == float('inf'):
-        done = True
-        return splits, relu_indexes, done, {}
-    else:
-        # If both are feasible and not pruned/counterexample, randomly choose one
-        randI = random.random()
-        chosen_split = split1 if randI > 0.5 else split2
-
-    # Update relu_status: set chosen node as not splittable
-    relu_indexes[action] = 0
-    done = not any(v == 1 for v in relu_indexes.values())
-    
-    return chosen_split, relu_indexes, done, {}
+    return children, done

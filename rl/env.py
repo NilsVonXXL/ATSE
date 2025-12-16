@@ -5,7 +5,7 @@ import random
 import pickle
 import os
 import json
-from rl.bab_rl import bab_step
+from rl.bab_rl import bab_step, Branch, collect_relu_nodes
 from micrograd.ibp import Interval, ibp
 from micrograd.engine import Value
 
@@ -25,7 +25,6 @@ class DeepThought42(gym.Env):
             dtype=np.float32
         )
 
-        # Step counter for reward scaling
         self._step_count = 0
         self._reward = -1
 
@@ -60,14 +59,17 @@ class DeepThought42(gym.Env):
         self.state = None
         self.relu_status = None
 
+        # Branch stack for tree traversal
+        self.branch_stack = []
+        self.current_branch = None
     def reset(self, seed=None, options=None):
         weights_path, input_path, input_folder = random.choice(self.initial_states)
         self._step_count = 0  # Reset step counter at the start of each episode
 
         weights_path = os.path.normpath(weights_path)
         parts = weights_path.split(os.sep)
-        domain = parts[-4]      # 'blobs'
-        net_num = parts[-2]     # '2'
+        domain = parts[-4]
+        net_num = parts[-2]
         model_name = f"model_{domain}_{net_num}.pkl"
         model_path = os.path.join(self.models_dir, model_name)
 
@@ -99,54 +101,91 @@ class DeepThought42(gym.Env):
             relu_dic = json.load(f)
         relu_nodes = np.array(list(relu_dic.values()), dtype=np.float32)
         self.relu_status = relu_nodes
-        #print(self.relu_status)
 
-        # Initial splits
+        # Initial splits and bounds
         self.splits = dict()
         self.score = self.model(self.in_bounds)
         self.node_bounds = ibp(self.score, self.in_bounds, return_all=True)
 
-        # Build initial state
-        self.state = np.concatenate([self.weights_flat, self.inputs_vec, relu_nodes])
-        
+        # Branch stack logic
+        relu_nodes_list, relu_indexes = collect_relu_nodes(self.score, self.node_bounds, self.splits.keys())
+        root_branch = Branch(splits=self.splits.copy(), node_bounds=self.node_bounds.copy(), relu_indexes=relu_indexes.copy())
+        self.branch_stack = []
+        self.current_branch = root_branch
+
+        # Build initial state from current_branch
+        self.state = np.concatenate([
+            self.weights_flat,
+            self.inputs_vec,
+            np.array(list(self.current_branch.relu_indexes.values()), dtype=np.float32)
+        ])
+
         info = {
-            "score": self.score.data,
-            "relu_nodes": self.relu_status
+            "score": float(self.score.data),
+            # Only include relu_status as a numpy array (not relu_indexes dict)
+            "relu_status": self.relu_status.copy()
         }
-        #print(weights_path, input_path,input_folder)
-        #print(info)
         return self.state, info
 
     def step(self, action):
-        # Call bab_step with node_bounds as input
-        next_splits, next_relu_status, done, info = bab_step(self.score, self.in_bounds, self.node_bounds, self.splits, action)
-        self.relu_status = np.array(list(next_relu_status.values()), dtype=np.float32)
-        self.splits = next_splits
-        self.inputs = self.inputs_vec
+        #DEBUG for parallel envs
+        #print(f"[ENV DEBUG] PID: {os.getpid()}, Step: {getattr(self, '_step_count', 'N/A')}, Action: {action}")
+        
+        done = False
+        children, done = bab_step(self.score, self.in_bounds, self.current_branch, action)
+        reward = -1
+        info = {}
+        self._step_count += 1
+
+        # Debug: print stack size and current branch depth
+        stack_size = len(self.branch_stack)
+        branch_depth = len(self.current_branch.splits) if self.current_branch else 0
+        print(f"[DEBUG] Step: {self._step_count}, Stack size: {stack_size}, Branch depth: {branch_depth}, Done: {done}")
+
+        if len(children) == 0:
+            # Both childeren Pruned
+            #TODO: Consider Invalid children
+            # Pop next branch from stack if available, else finish
+            if len(self.branch_stack) > 0:
+                self.current_branch = self.branch_stack.pop()
+            else:
+                self.current_branch = None
+                done = True
+        else:
+            # Valid split: push all but one child to stack, continue with one (DFS)
+            for b in children[:-1]:
+                self.branch_stack.append(b)
+            self.current_branch = children[-1]
+
+        # If stack is empty and no current_branch left, done
+        if self.current_branch is None and len(self.branch_stack) == 0:
+            done = True
+
+        # Update relu_status for observation
+        if self.current_branch is not None:
+            self.relu_status = np.array(list(self.current_branch.relu_indexes.values()), dtype=np.float32)
+        else:
+            self.relu_status = np.zeros(self.relu_dim, dtype=np.float32)
+                    
 
         # Build next state
-        weights_flat = self.weights_flat
-        next_state = np.concatenate([weights_flat, self.inputs_vec, self.relu_status])
+        next_state = np.concatenate([
+            self.weights_flat,
+            self.inputs_vec,
+            self.relu_status
+        ])
         self.state = next_state
 
-        if self._step_count == 0:
-            pass
-        else:
-            # Multiply reward by 1.3 for each step in the episode
-            self._reward = self._reward ** self._step_count
 
-        self._step_count += 1
-        reward = -1
-        
+        # Only include picklable types in info
         info = {
-            "splits": self.splits.copy(),
+            # Optionally, just include the number of splits (branch depth) for debug
+            "branch_depth": len(self.current_branch.splits) if self.current_branch else 0,
             "relu_status": self.relu_status.copy(),
             "action": int(action),
-            "reward": reward,
-            "done": done
+            "reward": float(reward),
+            "done": bool(done)
         }
-        #print("x"*20)
-        #print(info["action"], info["reward"], info["done"])
 
         terminated = done
         truncated = False
@@ -159,5 +198,5 @@ class DeepThought42(gym.Env):
         pass
     
     def get_action_mask(self):
-    # Returns a boolean mask: True for valid actions, False for invalid
+        # Returns a boolean mask: True for valid actions, False for invalid
         return (self.relu_status == 1)

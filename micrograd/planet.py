@@ -74,8 +74,8 @@ def planet_relaxation(output: Value, in_bounds, node_bounds):
 
     prob_lower = cp.Problem(cp.Minimize(env[output]), constraints)
     try:
-        result_lower = prob_lower.solve()
-    except Exception as e:
+        result_lower = prob_lower.solve(solver = "HiGHS")                               # Trying new solver for better LP performance (cylp)
+    except Exception as e:                                                              # TODO: Try HiGHS solver if CYLP fails
         print(f"Solver failed: {e}")
         return float('inf'), None  
     minimizer_lower = {in_node: env[in_node].value for in_node in in_bounds}
