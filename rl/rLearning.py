@@ -78,13 +78,13 @@ if __name__ == "__main__":
     )
 
     # For evaluation, use a single env or handle vectorized obs/actions
-    obs = env.reset()
-    for i in range(1000):
-        actions, _states = model.predict(obs, deterministic=True)
-        # actions is a vector (one per env)
-        obs, rewards, dones, truncateds, infos = env.step(actions)
-        if dones.any():
-            obs = env.reset()
+    #obs = env.reset()
+    #for i in range(1000):
+    #    actions, _states = model.predict(obs, deterministic=True)
+    #    obs, rewards, dones, truncateds, infos = env.step(actions)
+    #    if dones.any():
+    #        # Only reset the environments that are done
+    #        obs = env.reset_done()
 
     model.save("ppo_deepthought42")
 

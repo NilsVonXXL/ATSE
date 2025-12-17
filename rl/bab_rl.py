@@ -61,7 +61,7 @@ def bab_step(score, in_bounds, branch: Branch, action):
     # Check if action is valid
     if relu_status[action] == 0:
         # Invalid action: return empty list (caller can penalize)
-        return []
+        return [], None
     
     # Find the actual ReLU node to split
     c = -1
