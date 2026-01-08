@@ -42,6 +42,7 @@ for model_idx in tqdm(range(NUM_MODELS), desc="Random Models"):
         if (0 <= score.data <= 2):
             skip_count += 1
     
+    print(skip_count) 
     if skip_count > num_samples * 0.25:
         continue
     

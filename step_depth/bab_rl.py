@@ -48,6 +48,7 @@ class Branch:
     
 
 def bab_step(score, in_bounds, node_bounds, splits, action):
+    print("WARNING: bab_step in bab_rl.py is deprecated. Use bab_step in rl/bab_rl.py instead.")
     """
     Perform one BaB step for RL.
     score: output node

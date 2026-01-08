@@ -90,7 +90,7 @@ def bab_step(score, in_bounds, branch: Branch, action):
     if branch_lb1 != float('inf'):
         try:
             branch_ub1 = rerun(score, minimizer1)
-            print(f"branch_ub1: {branch_ub1}")  # Debugging
+            #print(f"branch_ub1: {branch_ub1}")  # Debugging
         except Exception as e:
             print(f"rerun failed for split1: {e}")
             branch_ub1 = float('inf')
@@ -114,7 +114,7 @@ def bab_step(score, in_bounds, branch: Branch, action):
     if branch_lb2 != float('inf'):
         try:
             branch_ub2 = rerun(score, minimizer2)
-            print(f"branch_ub2: {branch_ub2}")  # Debugging
+            #print(f"branch_ub2: {branch_ub2}")  # Debugging
         except Exception as e:
             print(f"rerun failed for split2: {e}")
             branch_ub2 = float('inf')

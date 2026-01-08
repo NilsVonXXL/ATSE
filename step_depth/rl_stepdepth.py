@@ -10,7 +10,7 @@ stepdepth = []
 initial_states = []
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-DATASET_DIR = os.path.join(BASE_DIR, "newDataset")
+DATASET_DIR = os.path.join(BASE_DIR, "oldDataset")
 
 
 for domain in os.listdir(DATASET_DIR):
@@ -37,6 +37,7 @@ for domain in os.listdir(DATASET_DIR):
 
 
 for w, i, f in tqdm(initial_states, desc="Evaluating PPO on instances"):
+    #print(w, i, f)
     env = DeepThought42(models_dir=MODELS_DIR, initial_states=(w, i, f))
     obs, info = env.reset()
     done = False
@@ -47,6 +48,7 @@ for w, i, f in tqdm(initial_states, desc="Evaluating PPO on instances"):
         action = int(action) 
         obs, reward, done, truncated, info = env.step(action)
         steps += 1
+        #print("Step:", steps, "Action:", action, "Reward:", reward, "Done:", done)
     #print("For", w, i, f, "solved in", steps, "steps")
     stepdepth.append(steps)
 
