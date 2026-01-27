@@ -5,9 +5,11 @@ import random
 import pickle
 import os
 import json
+from collections import deque
 from rl.bab_rl import bab_step, Branch, collect_relu_nodes
 from micrograd.ibp import Interval, ibp
 from micrograd.engine import Value
+from micrograd.nn import MLP
 
 class DeepThought42(gym.Env):
     def __init__(self, models_dir, dataset_dir):
@@ -28,18 +30,42 @@ class DeepThought42(gym.Env):
         self._step_count = 0
         self._reward = -1
 
-        # Gather all (model_path, input_folder) pairs
+        # Gather all (model_path/params_path, input_folder, is_params) tuples
         self.initial_states = []
+        use_models_dir = self.models_dir is not None and os.path.exists(self.models_dir)
+
+        # Support both old and new dataset structures
         for domain in os.listdir(self.dataset_dir):
             domain_path = os.path.join(self.dataset_dir, domain)
             if not os.path.isdir(domain_path):
                 continue
-            for data_subdir in os.listdir(domain_path):
-                data_path = os.path.join(domain_path, data_subdir)
-                if not os.path.isdir(data_path):
-                    continue
-                for net_num in os.listdir(data_path):
-                    net_path = os.path.join(data_path, net_num)
+            # Try to detect if this is a 'data-*' or 'random_*' folder (old vs new)
+            subdirs = os.listdir(domain_path)
+            # If any subdir starts with 'data-', treat as old structure
+            if any(s.startswith('data-') for s in subdirs):
+                for data_subdir in subdirs:
+                    data_path = os.path.join(domain_path, data_subdir)
+                    if not os.path.isdir(data_path):
+                        continue
+                    for net_num in os.listdir(data_path):
+                        net_path = os.path.join(data_path, net_num)
+                        if not os.path.isdir(net_path):
+                            continue
+                        weights_path = os.path.join(net_path, 'parameters.pkl')
+                        if not os.path.exists(weights_path):
+                            continue
+                        input_folders = [f for f in os.listdir(net_path) if f.startswith('input-x-')]
+                        for input_folder in input_folders:
+                            input_path = os.path.join(net_path, input_folder)
+                            if os.path.isdir(input_path):
+                                if use_models_dir:
+                                    self.initial_states.append((weights_path, input_path, input_folder, False))
+                                else:
+                                    self.initial_states.append((weights_path, input_path, input_folder, True))
+            else:
+                # New structure: domain_path/random_*/input-x-*
+                for net_num in subdirs:
+                    net_path = os.path.join(domain_path, net_num)
                     if not os.path.isdir(net_path):
                         continue
                     weights_path = os.path.join(net_path, 'parameters.pkl')
@@ -49,7 +75,15 @@ class DeepThought42(gym.Env):
                     for input_folder in input_folders:
                         input_path = os.path.join(net_path, input_folder)
                         if os.path.isdir(input_path):
-                            self.initial_states.append((weights_path, input_path, input_folder))
+                            if use_models_dir:
+                                self.initial_states.append((weights_path, input_path, input_folder, False))
+                            else:
+                                self.initial_states.append((weights_path, input_path, input_folder, True))
+
+        if not self.initial_states:
+            raise RuntimeError(f"No valid initial states found in dataset_dir '{self.dataset_dir}'.\n"
+                               f"Checked for both old and new dataset structures.\n"
+                               f"Please ensure your dataset is populated and the directory structure is correct.")
 
         self.model = None
         self.inputs = None
@@ -59,23 +93,36 @@ class DeepThought42(gym.Env):
         self.state = None
         self.relu_status = None
 
-        # Branch stack for tree traversal
-        self.branch_stack = []
+        # Branch queue for BFS tree traversal
+        self.branch_queue = deque()
         self.current_branch = None
+        
+        print(f"DeepThought42 initialized with {len(self.initial_states)} initial states.")
+
     def reset(self, seed=None, options=None):
-        weights_path, input_path, input_folder = random.choice(self.initial_states)
+        weights_path, input_path, input_folder, is_params = random.choice(self.initial_states)
         self._step_count = 0  # Reset step counter at the start of each episode
 
-        weights_path = os.path.normpath(weights_path)
-        parts = weights_path.split(os.sep)
-        domain = parts[-4]
-        net_num = parts[-2]
-        model_name = f"model_{domain}_{net_num}.pkl"
-        model_path = os.path.join(self.models_dir, model_name)
+        #print(f"Resetting environment with input_path: {input_path}")
+        
+        if not is_params:
+            # Use model file from models_dir
+            weights_path = os.path.normpath(weights_path)
+            parts = weights_path.split(os.sep)
+            domain = parts[-4]
+            net_num = parts[-2]
+            model_name = f"model_{domain}_{net_num}.pkl"
+            model_path = os.path.join(self.models_dir, model_name)
+            with open(model_path, 'rb') as f:
+                self.model = pickle.load(f)
+        else:
+            # Reconstruct model from parameters.pkl
+            self.model = MLP(2, [16, 16, 1])
+            with open(weights_path, 'rb') as f:
+                params = pickle.load(f)
+            for p_model, p_loaded in zip(self.model.parameters(), params):
+                p_model.data = p_loaded.data
 
-        # Load the model from models/
-        with open(model_path, 'rb') as f:
-            self.model = pickle.load(f)
         weights = [p for p in self.model.parameters()]
         self.weights_flat = np.array([w.data for w in weights], dtype=np.float32)
 
@@ -107,10 +154,10 @@ class DeepThought42(gym.Env):
         self.score = self.model(self.in_bounds)
         self.node_bounds = ibp(self.score, self.in_bounds, return_all=True)
 
-        # Branch stack logic
+        # Branch queue logic (BFS)
         relu_nodes_list, relu_indexes = collect_relu_nodes(self.score, self.node_bounds, self.splits.keys())
         root_branch = Branch(splits=self.splits.copy(), node_bounds=self.node_bounds.copy(), relu_indexes=relu_indexes.copy())
-        self.branch_stack = []
+        self.branch_queue = deque()
         self.current_branch = root_branch
 
         # Build initial state from current_branch
@@ -128,37 +175,32 @@ class DeepThought42(gym.Env):
         return self.state, info
 
     def step(self, action):
-        #DEBUG for parallel envs
-        #print(f"[ENV DEBUG] PID: {os.getpid()}, Step: {getattr(self, '_step_count', 'N/A')}, Action: {action}")
-        
+
+        # BFS: use a queue for branch traversal
         done = False
         children, done = bab_step(self.score, self.in_bounds, self.current_branch, action)
         reward = -1
         info = {}
         self._step_count += 1
 
-        # Debug: print stack size and current branch depth
-        stack_size = len(self.branch_stack)
-        branch_depth = len(self.current_branch.splits) if self.current_branch else 0
-        print(f"[DEBUG] Step: {self._step_count}, Stack size: {stack_size}, Branch depth: {branch_depth}, Done: {done}")
+        # Debug print for BFS queue and branch info
+        #print(f"[BFS DEBUG] Step: {self._step_count}, Queue size: {len(self.branch_queue)}, "
+        #      f"Current branch depth: {len(self.current_branch.splits) if self.current_branch else 'None'}, Action: {action}, Done: {done}")
 
         if len(children) == 0:
-            # Both childeren Pruned
-            #TODO: Consider Invalid children
-            # Pop next branch from stack if available, else finish
-            if len(self.branch_stack) > 0:
-                self.current_branch = self.branch_stack.pop()
+            # Both children pruned or invalid action
+            if len(self.branch_queue) > 0:
+                self.current_branch = self.branch_queue.popleft()
             else:
                 self.current_branch = None
                 done = True
         else:
-            # Valid split: push all but one child to stack, continue with one (DFS)
-            for b in children[:-1]:
-                self.branch_stack.append(b)
-            self.current_branch = children[-1]
+            # Valid split: enqueue all children (BFS)
+            self.branch_queue.extend(children)
+            self.current_branch = self.branch_queue.popleft() if len(self.branch_queue) > 0 else None
 
-        # If stack is empty and no current_branch left, done
-        if self.current_branch is None and len(self.branch_stack) == 0:
+        # If queue is empty and no current_branch left, done
+        if self.current_branch is None and len(self.branch_queue) == 0:
             done = True
 
         # Update relu_status for observation

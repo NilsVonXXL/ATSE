@@ -8,7 +8,7 @@ from tqdm import tqdm
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
-DATASET_DIR = os.path.join(BASE_DIR, "newDataset")
+DATASET_DIR = os.path.join(BASE_DIR, "oldDataset")
 MODEL_PATH = os.path.join(BASE_DIR, "gnn_depth", "strong_branching_nn_eval.pt")
 
 # Model setup
@@ -61,5 +61,5 @@ for w, i, f in tqdm(initial_states, desc="Evaluating GNN on instances"):
     #print("For", w, i, f, "solved in", steps, "steps")
     stepdepth.append(steps)
 
-with open("gnn_stepdepth.pkl", "wb") as f:
+with open("gnn_stepdepth_0802.pkl", "wb") as f:
     pickle.dump(stepdepth, f)

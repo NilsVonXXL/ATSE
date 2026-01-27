@@ -4,13 +4,14 @@ newDataset
 oldDataset
 latex
 classification
-
+randomDataset*
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
+*ppo_deep*
+events.out*
 # C extensions
 *.so
 

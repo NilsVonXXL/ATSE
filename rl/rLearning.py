@@ -1,3 +1,4 @@
+
 import gymnasium as gym
 from rl.env import DeepThought42
 from sb3_contrib import MaskablePPO
@@ -9,10 +10,12 @@ import random
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
+import argparse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = os.path.join(BASE_DIR, "models")
-DATASET_DIR = os.path.join(BASE_DIR, "newDataset")
+#MODELS_DIR = os.path.join(BASE_DIR, "models")
+MODELS_DIR = None
+DATASET_DIR = os.path.join(BASE_DIR, "randomDataset(-5,5)")
 
 
 seed = 42
@@ -43,10 +46,22 @@ def make_env():
 
 
 if __name__ == "__main__":
-    #Ensure single-threaded operation for each subprocess
+    parser = argparse.ArgumentParser(description="Train MaskablePPO with variable timesteps.")
+    parser.add_argument('--timesteps', type=int, default=50_000, help='Total timesteps for training (default: 100000)')
+    args = parser.parse_args()
+
+    total_timesteps = args.timesteps
+    # Set names based on timesteps
+    checkpoint_dir = f'./checkpoints/{total_timesteps}steps/'
+    tb_log_name = f"{total_timesteps}_steps_run"
+    model_save_name = f"{total_timesteps}_ppo_deepthought42_random_-5_5"
+
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    # Ensure single-threaded operation for each subprocess
     torch.set_num_threads(1)
     # Number of parallel environments
-    num_envs = 2
+    num_envs = 10
     env = SubprocVecEnv([make_env() for _ in range(num_envs)])
 
     env.reset()
@@ -63,29 +78,19 @@ if __name__ == "__main__":
     )
 
     checkpoint_callback = CheckpointCallback(
-        save_freq=1000,  # Save every 1000 steps
-        save_path='./checkpoints/',
+        save_freq=10000,  # Save every 10000 steps
+        save_path=checkpoint_dir,
         name_prefix='ppo_deepthought42'
     )
 
     model.learn(
-        #debug
-        total_timesteps=1_000,
-        #total_timesteps=30_000,
-        tb_log_name="first_run",
+        total_timesteps=total_timesteps,
+        tb_log_name=tb_log_name,
         progress_bar=True,
         callback=checkpoint_callback
     )
 
-    # For evaluation, use a single env or handle vectorized obs/actions
-    #obs = env.reset()
-    #for i in range(1000):
-    #    actions, _states = model.predict(obs, deterministic=True)
-    #    obs, rewards, dones, truncateds, infos = env.step(actions)
-    #    if dones.any():
-    #        # Only reset the environments that are done
-    #        obs = env.reset_done()
-
-    model.save("ppo_deepthought42")
+    model.save(model_save_name)
 
     env.close()
+    

@@ -3,14 +3,12 @@ import pickle
 import matplotlib.pyplot as plt
 import sys
 # --- 1. Count step depths from folders ---
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATASET_DIR = os.path.join(BASE_DIR, "newDataset")
-CLASS_DIR = os.path.join(BASE_DIR, "classDataset")
+DATASET_DIR = os.path.join(BASE_DIR, "oldDataset")
 folder_stepdepths = []
 
-# Collect (step_depth, input_folder_path) pairs
-folder_depth_pairs = []
-
+# Collect (step_depth, input_folder_path) pairs (only for oldDataset)
 for domain in os.listdir(DATASET_DIR):
     domain_path = os.path.join(DATASET_DIR, domain)
     if not os.path.isdir(domain_path):
@@ -29,61 +27,41 @@ for domain in os.listdir(DATASET_DIR):
                 if os.path.isdir(input_folder_path):
                     n = len(os.listdir(input_folder_path))
                     folder_stepdepths.append(n - 1)
-                    folder_depth_pairs.append((n - 1, input_folder_path))
 
 
-# --- 2. Load pickle files ---
-with open(os.path.join("gnn_stepdepth.pkl"), 'rb') as f:
+
+# --- 2. Load only two pickle files (GNN and RL) ---
+with open(os.path.join("gnn_stepdepth_0802.pkl"), 'rb') as f:
     gnn_stepdepths = pickle.load(f)
-with open(os.path.join("stepdepth.pkl"), 'rb') as f:
-    rl_stepdepth = pickle.load(f)
-with open(os.path.join("gnn_stepdepthC.pkl"), 'rb') as f:
-    gnn_stepdepths_alt = pickle.load(f)
-with open(os.path.join("stepdepthC.pkl"), 'rb') as f:
-    rl_stepdepth_alt = pickle.load(f)
+with open(os.path.join("stepdepth_0802_nD.pkl"), 'rb') as f:
+    rl_stepdepth_nD = pickle.load(f)
+with open(os.path.join("stepdepth_0802_(-1,1).pkl"), 'rb') as f:
+    rl_stepdepth_neg11 = pickle.load(f)
+with open(os.path.join("stepdepth_0802_(gauss).pkl"), 'rb') as f:
+    rl_stepdepth_gauss = pickle.load(f)
 
 
-# --- Count step depths for input folders in 'classDataset' folder ---
-classification_stepdepths = []
-for domain in os.listdir(CLASS_DIR):
-    domain_path = os.path.join(CLASS_DIR, domain)
-    if not os.path.isdir(domain_path):
-        continue
-    for data_subdir in os.listdir(domain_path):
-        data_path = os.path.join(domain_path, data_subdir)
-        if not os.path.isdir(data_path):
-            continue
-        for net_num in os.listdir(data_path):
-            net_path = os.path.join(data_path, net_num)
-            if not os.path.isdir(net_path):
-                continue
-            # Directly look for input-x-* folders here
-            input_folders = [f for f in os.listdir(net_path) if f.startswith('input-x-')]
-            for f in input_folders:
-                input_folder_path = os.path.join(net_path, f)
-                if os.path.isdir(input_folder_path):
-                    n = len(os.listdir(input_folder_path))
-                    classification_stepdepths.append(n - 1)
-
-# --- Plot boxplots (only once, at the end) ---
-plt.figure(figsize=(20, 6))
+# --- Plot boxplots for only three datasets ---
+plt.figure(figsize=(12, 6))
 labels = [
-    'SB', 'SB (test)',
-    'GNN', 'GNN (test)',
-    'RL', 'RL (test)'
-    
+    'SB',
+    'GNN',
+    'RL(nD)',
+    'RL(-1,1)',
+    'RL(gauss)'
 ]
 data = [
-    folder_stepdepths, classification_stepdepths,
-    gnn_stepdepths, gnn_stepdepths_alt,
-    rl_stepdepth, rl_stepdepth_alt
-    
+    folder_stepdepths,
+    gnn_stepdepths,
+    rl_stepdepth_nD,
+    rl_stepdepth_neg11,
+    rl_stepdepth_gauss
 ]
 
 plt.subplot(1, 2, 1)
 plt.boxplot(
     data,
-    labels=labels,
+    tick_labels=labels,
     patch_artist=True,
     notch=True,
     showmeans=True,
@@ -94,7 +72,7 @@ plt.title('Full Range')
 plt.subplot(1, 2, 2)
 plt.boxplot(
     data,
-    labels=labels,
+    tick_labels=labels,
     patch_artist=True,
     notch=True,
     showmeans=True,
